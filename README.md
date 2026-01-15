@@ -1,6 +1,6 @@
 # Entropic CRMArena
 
-> **🏆 AgentX Competition Phase 1**
+> **AgentX Competition Phase 1**
 
 [![Docker](https://img.shields.io/badge/Docker-ghcr.io%2Frkstu%2Fentropic--crmarena--green-blue)](https://ghcr.io/rkstu/entropic-crmarena-green)
 [![AgentBeats](https://img.shields.io/badge/AgentBeats-Registered-green)](https://agentbeats.dev)
@@ -8,16 +8,16 @@
 
 **A2A-compliant benchmark** for evaluating CRM agents with adversarial robustness testing.
 
-### 📚 Essential Resources
+### Essential Resources
 
-| Resource                   | Link                                                                          | Description                                      |
-| -------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------ |
-| 🎥 **Video Tutorial**      | [YouTube: AgentBeats End-to-End](https://www.youtube.com/watch?v=ZmBnC4xTyRU) | Complete walkthrough of agent setup & submission |
-| 📖 **Official Tutorial**   | [docs.agentbeats.dev/tutorial](https://docs.agentbeats.dev/tutorial/)         | Step-by-step guide with repo templates           |
-| 🏠 **AgentBeats Platform** | [agentbeats.dev](https://agentbeats.dev)                                      | Register agents & view leaderboards              |
-| 🏅 **Competition Details** | [Berkeley RDI AgentX](https://rdi.berkeley.edu/agentx-agentbeats)             | Rules, deadlines, prizes                         |
+| Resource              | Link                                                                          | Description                                      |
+| --------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------ |
+| **Video Tutorial**    | [YouTube: AgentBeats End-to-End](https://www.youtube.com/watch?v=ZmBnC4xTyRU) | Complete walkthrough of agent setup & submission |
+| **Official Tutorial** | [docs.agentbeats.dev/tutorial](https://docs.agentbeats.dev/tutorial/)         | Step-by-step guide with repo templates           |
+| **AgentBeats**        | [agentbeats.dev](https://agentbeats.dev)                                      | Register agents & view leaderboards              |
+| **Competition**       | [Berkeley RDI AgentX](https://rdi.berkeley.edu/agentx-agentbeats)             | Rules, deadlines, prizes                         |
 
-### 🛠️ Template Repositories
+### Template Repositories
 
 | Template                 | Link                                                                                          | Use For                           |
 | ------------------------ | --------------------------------------------------------------------------------------------- | --------------------------------- |
@@ -29,17 +29,17 @@
 
 ---
 
-## 📋 Table of Contents
+## Table of Contents
 
-| Section                                                                      | Description                                 |
-| ---------------------------------------------------------------------------- | ------------------------------------------- |
-| [Overview](#overview)                                                        | What this benchmark does, features, dataset |
-| [Building Your Purple Agent](#-building-your-purple-agent)                   | A2A compatibility & template                |
-| [Part 1: Local Testing](#-part-1-local-testing)                              | Test your agent locally (7 steps)           |
-| [Part 2: Leaderboard Submission](#-part-2-agentbeats-leaderboard-submission) | Submit to AgentBeats (7 steps)              |
-| [Configuration](#️-configuration)                                            | All config options                          |
-| [Technical Reference](#-technical-reference)                                 | Task format, scoring, schemas               |
-| [Changelog](#-changelog)                                                     | Version history                             |
+| Section                                                                     | Description                                 |
+| --------------------------------------------------------------------------- | ------------------------------------------- |
+| [Overview](#overview)                                                       | What this benchmark does, features, dataset |
+| [Building Your Purple Agent](#building-your-purple-agent)                   | A2A compatibility & template                |
+| [Part 1: Local Testing](#part-1-local-testing)                              | Test your agent locally (7 steps)           |
+| [Part 2: Leaderboard Submission](#part-2-agentbeats-leaderboard-submission) | Submit to AgentBeats (7 steps)              |
+| [Configuration](#configuration)                                             | All config options                          |
+| [Technical Reference](#technical-reference)                                 | Task format, scoring, schemas               |
+| [Changelog](#changelog)                                                     | Version history                             |
 
 ---
 
@@ -81,7 +81,7 @@
 
 ---
 
-## 🔧 Building Your Purple Agent
+## Building Your Purple Agent
 
 Before testing, make sure your agent is **A2A compatible**.
 
@@ -123,11 +123,11 @@ your-agent/
 | ✅ Response Format | Return answers in A2A artifact format        |
 | ✅ Docker          | Build for `linux/amd64` platform             |
 
-> 📖 See the [AgentBeats Tutorial](https://docs.agentbeats.dev/tutorial/) for detailed implementation guidance.
+> See the [AgentBeats Tutorial](https://docs.agentbeats.dev/tutorial/) for detailed implementation guidance.
 
 ---
 
-## 🚀 Part 1: Local Testing
+## Part 1: Local Testing
 
 Use this to **test your Purple Agent locally** before submitting to the leaderboard.
 
@@ -319,15 +319,15 @@ The response includes:
 
 ---
 
-## 🏆 Part 2: AgentBeats Leaderboard Submission
+## Part 2: AgentBeats Leaderboard Submission
 
 Once your agent performs well locally, submit it to the official leaderboard!
 
-### 📺 Watch First: End-to-End Tutorial
+### Recommended: Watch the Tutorial First
 
 Before starting, watch the **[AgentBeats YouTube Tutorial](https://www.youtube.com/watch?v=ZmBnC4xTyRU)** for a complete walkthrough of the submission process.
 
-### ✅ Pre-Submission Checklist
+### Pre-Submission Checklist
 
 | Requirement            | Details                                                                                     |
 | ---------------------- | ------------------------------------------------------------------------------------------- |
@@ -388,7 +388,7 @@ docker push ghcr.io/YOUR_USERNAME/your-agent:latest
    | Docker Image | `ghcr.io/YOUR_USERNAME/your-agent:latest` |
    | Repository URL | Your GitHub repo URL |
 5. Click **"Register"**
-6. **⚠️ Copy your Agent ID** (you'll need this!)
+6. **Copy your Agent ID** (you'll need this!)
 
 ### Step 3: Fork the Leaderboard Repository
 
@@ -451,7 +451,7 @@ timeout = 300             # Seconds per task
 
 1. The workflow creates a **Pull Request** with your results
 2. **Merge the PR** (or wait for approval if submitting to someone else's leaderboard)
-3. 🎉 **Your scores appear on [agentbeats.dev](https://agentbeats.dev) within minutes!**
+3. Your scores appear on [agentbeats.dev](https://agentbeats.dev) within minutes!
 
 ### Troubleshooting Leaderboard Submission
 
@@ -464,7 +464,7 @@ timeout = 300             # Seconds per task
 
 ---
 
-## ⚙️ Configuration
+## Configuration
 
 ### Basic Config
 
@@ -505,7 +505,7 @@ timeout = 300             # Seconds per task
 
 ---
 
-## 📊 Technical Reference
+## Technical Reference
 
 <details>
 <summary><b>Task Format Sent to Purple Agent</b></summary>
@@ -700,7 +700,7 @@ docker push ghcr.io/rkstu/entropic-crmarena-green:latest
 
 ---
 
-## 📝 Changelog
+## Changelog
 
 ### v1.1.0 (January 15, 2026)
 
