@@ -1,0 +1,35 @@
+[project]
+name = "entropic-crmarena"
+version = "1.0.0"
+description = "A2A Green Agent for CRM agent evaluation with Schema Drift, Context Rot, and 7D Scoring"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    # A2A Protocol SDK
+    "a2a-sdk[http-server]>=0.3.20",
+    "pydantic>=2.0.0",
+    "uvicorn>=0.30.0",
+    "httpx>=0.27.0",
+    "python-dotenv>=1.0.0",
+    # CRM Evaluation
+    "datasets>=2.14.0",         # HuggingFace datasets for CRMArenaPro
+    "openai>=1.0.0",            # For answer extraction LLM calls
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+    "httpx>=0.28.1",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src", "crm"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+addopts = "-v"
