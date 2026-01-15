@@ -1,25 +1,35 @@
-# ============================================================================
-# Entropic CRMArena - AgentBeats Benchmark Scenario
-# ============================================================================
+[project]
+name = "entropic-crmarena"
+version = "1.0.0"
+description = "A2A Green Agent for CRM agent evaluation with Schema Drift, Context Rot, and 7D Scoring"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    # A2A Protocol SDK
+    "a2a-sdk[http-server]>=0.3.20",
+    "pydantic>=2.0.0",
+    "uvicorn>=0.30.0",
+    "httpx>=0.27.0",
+    "python-dotenv>=1.0.0",
+    # CRM Evaluation
+    "datasets>=2.14.0",         # HuggingFace datasets for CRMArenaPro
+    "openai>=1.0.0",            # For answer extraction LLM calls
+]
 
-# GREEN AGENT - Entropic CRMArena Evaluator
-[green_agent]
-agentbeats_id = "019ba211-13b7-7e83-9086-c8015a5e4957"
-env = { NEBIUS_API_KEY = "${NEBIUS_API_KEY}" }
+[project.optional-dependencies]
+test = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+    "httpx>=0.28.1",
+]
 
-# PURPLE AGENT - Agent Under Test
-[[participants]]
-agentbeats_id = "019ba27e-3b82-7d43-8822-51357ccd4861"
-name = "agent"
-env = { NEBIUS_API_KEY = "${NEBIUS_API_KEY}" }
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-# BENCHMARK CONFIGURATION
-[config]
-task_limit = 10
-task_percentage = 10.0
-drift_level = "low"
-rot_level = "low"
-max_steps = 15
-timeout = 300
-org_type = "b2b"
+[tool.hatch.build.targets.wheel]
+packages = ["src", "crm"]
 
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+addopts = "-v"
