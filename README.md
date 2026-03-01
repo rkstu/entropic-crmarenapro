@@ -242,6 +242,8 @@ curl http://127.0.0.1:9010/.well-known/agent-card.json
 
 ### Step 6: Run Assessment (Terminal 3)
 
+> **Note**: Schema Drift (`medium`) and Context Rot (`medium`) are now hardcoded. Only `task_limit` needs to be specified.
+
 **Quick test (1 task):**
 
 ```bash
@@ -257,7 +259,7 @@ curl -X POST http://127.0.0.1:9009/ \
         "role": "user",
         "parts": [{
           "kind": "text",
-          "text": "{\"participants\": {\"agent\": \"http://127.0.0.1:9010/\"}, \"config\": {\"task_limit\": 1, \"drift_level\": \"none\", \"rot_level\": \"none\", \"org_type\": \"b2b\"}}"
+          "text": "{\"participants\": {\"agent\": \"http://127.0.0.1:9010/\"}, \"config\": {\"task_limit\": 1}}"
         }]
       }
     }
@@ -279,29 +281,29 @@ curl -X POST http://127.0.0.1:9009/ \
         "role": "user",
         "parts": [{
           "kind": "text",
-          "text": "{\"participants\": {\"agent\": \"http://127.0.0.1:9010/\"}, \"config\": {\"task_limit\": 5, \"drift_level\": \"none\", \"rot_level\": \"none\", \"org_type\": \"b2b\"}}"
+          "text": "{\"participants\": {\"agent\": \"http://127.0.0.1:9010/\"}, \"config\": {\"task_limit\": 5}}"
         }]
       }
     }
   }'
 ```
 
-**Adversarial test (with Schema Drift):**
+**Full benchmark (all 2,140 tasks):**
 
 ```bash
 curl -X POST http://127.0.0.1:9009/ \
   -H "Content-Type: application/json" \
   -d '{
-        "jsonrpc": "2.0",
-        "method": "message/send",
-        "id": "1",
-        "params": {
-            "message": {
-        "messageId": "test-adv",
-                "role": "user",
+    "jsonrpc": "2.0",
+    "method": "message/send",
+    "id": "1",
+    "params": {
+      "message": {
+        "messageId": "test-full",
+        "role": "user",
         "parts": [{
           "kind": "text",
-          "text": "{\"participants\": {\"agent\": \"http://127.0.0.1:9010/\"}, \"config\": {\"task_limit\": 5, \"drift_level\": \"low\", \"rot_level\": \"low\", \"org_type\": \"b2b\"}}"
+          "text": "{\"participants\": {\"agent\": \"http://127.0.0.1:9010/\"}, \"config\": {}}"
         }]
       }
     }
@@ -310,26 +312,40 @@ curl -X POST http://127.0.0.1:9009/ \
 
 ### Step 7: Interpret Results
 
-The response includes:
+The response includes both **Original** (CRMArena-Pro compatible) and **Entropic** (7-Dimension) scores:
 
 ```json
 {
   "summary": {
     "total_tasks": 5,
-    "total_passed": 1,
-    "pass_rate": 0.2,
-    "avg_score": 54.1
-  },
-  "timing": {
-    "total_seconds": 435.7,
-    "purple_agent_seconds": 435.7,
-    "purple_agent_percent": 100.0
+    "total_passed": 2,
+    "pass_rate": 0.4,
+    "avg_score": 70.9
   },
   "dimension_averages": {
-    "FUNCTIONAL": 30.7,
-    "TOKEN_EFFICIENCY": 98.9,
+    "FUNCTIONAL": 58.0,
+    "DRIFT_ADAPTATION": 40.0,
+    "TOKEN_EFFICIENCY": 99.5,
+    "QUERY_EFFICIENCY": 99.4,
+    "ERROR_RECOVERY": 58.0,
     "TRAJECTORY_EFFICIENCY": 100.0,
-    ...
+    "HALLUCINATION_RATE": 88.0
+  },
+  "original": {
+    "scores": {
+      "accuracy": 0.4,
+      "accuracy_percent": 40.0
+    }
+  },
+  "extension_metrics": {
+    "drift_level": "medium",
+    "rot_level": "medium",
+    "org_type": "b2b"
+  },
+  "timing": {
+    "total_seconds": 42.5,
+    "purple_agent_seconds": 40.0,
+    "purple_agent_percent": 94.2
   }
 }
 ```
@@ -338,7 +354,15 @@ The response includes:
 | ---------------------- | ----------------------------------------------- |
 | `pass_rate`            | % of tasks with crm_reward > 0                  |
 | `avg_score`            | Average 7D score (0-100)                        |
-| `purple_agent_percent` | % of time spent in your agent (should be ~100%) |
+| `original.accuracy`    | CRMArena-Pro compatible accuracy                |
+| `extension_metrics`    | Hardcoded adversarial settings used             |
+| `purple_agent_percent` | % of time spent in your agent (should be ~90%+) |
+
+**Per-Task Results** include:
+- `task_query`: Original question from the dataset
+- `dataset_reference`: Source, split, idx, reward_metric
+- `entropic`: 7-Dimension scores
+- `original`: CRMArena-Pro compatible reward
 
 ---
 
@@ -427,25 +451,27 @@ Edit `scenario.toml` in your forked repo:
 # Green Agent (this benchmark)
 [green_agent]
 agentbeats_id = "019ba211-13b7-7e83-9086-c8015a5e4957"  # Entropic CRMArena
-env = { NEBIUS_API_KEY = "${NEBIUS_API_KEY}" }  # Or use OPENAI_API_KEY
+env = { OPENAI_API_KEY = "${OPENAI_API_KEY}" }  # Or use NEBIUS_API_KEY
 
 # Your Purple Agent
 [[participants]]
 agentbeats_id = "YOUR_AGENT_ID_FROM_STEP_2"  # ← Paste your ID here!
 name = "agent"
-env = { NEBIUS_API_KEY = "${NEBIUS_API_KEY}" }  # Or use OPENAI_API_KEY
+env = { OPENAI_API_KEY = "${OPENAI_API_KEY}" }  # Or use NEBIUS_API_KEY
 
-# Assessment configuration
+# Assessment configuration (only task_limit is configurable)
 [config]
-task_limit = 20           # Number of tasks
-drift_level = "none"      # Start with "none", then try "low"
-rot_level = "none"        # Start with "none", then try "low"
-org_type = "b2b"          # b2b or b2c
-max_steps = 15            # Max turns per task
-timeout = 300             # Seconds per task
+task_limit = 20           # Number of tasks (omit for full 2,140 tasks)
+
+# NOTE: The following are HARDCODED in the green agent and cannot be changed:
+# drift_level = "medium"  (hardcoded)
+# rot_level = "medium"    (hardcoded)
+# org_type = "b2b"        (hardcoded)
+# max_steps = 10          (hardcoded)
+# timeout = 300           (hardcoded)
 ```
 
-> 💡 **API Key**: Use whichever API key matches your secret name in Step 5. Both `NEBIUS_API_KEY` and `OPENAI_API_KEY` work!
+> 💡 **API Key**: Use whichever API key matches your secret name in Step 5. Both `OPENAI_API_KEY` and `NEBIUS_API_KEY` work!
 
 ### Step 5: Add API Key as GitHub Secret
 
@@ -489,42 +515,50 @@ timeout = 300             # Seconds per task
 
 ## Configuration
 
-### Basic Config
+### Hardcoded Evaluation Settings (v2.0.0)
+
+For consistent leaderboard evaluation, the following parameters are **hardcoded** in the green agent and cannot be overridden:
+
+| Parameter     | Value      | Description                           |
+| ------------- | ---------- | ------------------------------------- |
+| `drift_level` | `"medium"` | Schema drift intensity (~30% renamed) |
+| `rot_level`   | `"medium"` | Context rot intensity (3-4 distractors) |
+| `org_type`    | `"b2b"`    | Business-to-Business dataset split    |
+| `max_steps`   | `10`       | Maximum agent turns per task          |
+| `timeout`     | `300`      | Seconds per task                      |
+
+> **Why hardcoded?** This ensures all leaderboard submissions are evaluated under identical adversarial conditions, making scores directly comparable.
+
+### Configurable Options
+
+Only `task_limit` can be configured for evaluation runs:
 
 ```json
 {
   "participants": { "agent": "http://your-agent:port/" },
   "config": {
-    "task_limit": 20,
-    "drift_level": "none",
-    "rot_level": "none",
-    "org_type": "b2b"
+    "task_limit": 5
   }
 }
 ```
 
-### All Options
+| Parameter         | Type   | Default | Description                    |
+| ----------------- | ------ | ------- | ------------------------------ |
+| `task_limit`      | int    | null    | Max tasks to run (null = all 2,140) |
+| `task_percentage` | float  | 5.0     | % of tasks to sample (if no limit) |
+| `task_ids`        | list   | null    | Specific task IDs              |
+| `task_categories` | list   | null    | Filter by category             |
 
-| Parameter         | Type   | Default | Description          |
-| ----------------- | ------ | ------- | -------------------- |
-| `task_limit`      | int    | null    | Max tasks to run     |
-| `task_percentage` | float  | 5.0     | % of tasks to sample |
-| `task_ids`        | list   | null    | Specific task IDs    |
-| `task_categories` | list   | null    | Filter by category   |
-| `drift_level`     | string | "none"  | none/low/medium/high |
-| `rot_level`       | string | "none"  | none/low/medium/high |
-| `max_steps`       | int    | 15      | Max agent turns      |
-| `timeout`         | int    | 300     | Seconds per task     |
-| `org_type`        | string | "b2b"   | b2b or b2c           |
+### Adversarial Levels (Reference)
 
-### Adversarial Levels
+| Level      | Schema Drift | Context Rot     |
+| ---------- | ------------ | --------------- |
+| `none`     | 0% renamed   | 0 distractors   |
+| `low`      | ~10% renamed | 1-2 distractors |
+| **`medium`** | **~30% renamed** | **3-4 distractors** |
+| `high`     | ~50% renamed | 5+ distractors  |
 
-| Level    | Schema Drift | Context Rot     |
-| -------- | ------------ | --------------- |
-| `none`   | 0% renamed   | 0 distractors   |
-| `low`    | ~10% renamed | 1-2 distractors |
-| `medium` | ~30% renamed | 3-4 distractors |
-| `high`   | ~50% renamed | 5+ distractors  |
+> The benchmark uses **medium** level for both Schema Drift and Context Rot.
 
 ---
 
@@ -590,24 +624,67 @@ timeout = 300             # Seconds per task
 {
   "summary": {
     "total_tasks": 5,
-    "total_passed": 1,
-    "pass_rate": 0.2,
-    "avg_score": 54.1
+    "total_passed": 2,
+    "pass_rate": 0.4,
+    "avg_score": 70.9
   },
   "dimension_averages": {
-    "FUNCTIONAL": 30.7,
-    "DRIFT_ADAPTATION": 0.0,
-    "TOKEN_EFFICIENCY": 98.9,
-    "QUERY_EFFICIENCY": 98.8,
-    "ERROR_RECOVERY": 44.0,
+    "FUNCTIONAL": 58.0,
+    "DRIFT_ADAPTATION": 40.0,
+    "TOKEN_EFFICIENCY": 99.5,
+    "QUERY_EFFICIENCY": 99.4,
+    "ERROR_RECOVERY": 58.0,
     "TRAJECTORY_EFFICIENCY": 100.0,
-    "HALLUCINATION_RATE": 96.0
+    "HALLUCINATION_RATE": 88.0
+  },
+  "extension_metrics": {
+    "drift_level": "medium",
+    "rot_level": "medium",
+    "org_type": "b2b",
+    "skip_original": false
+  },
+  "original": {
+    "scores": {
+      "accuracy": 0.4,
+      "accuracy_percent": 40.0
+    },
+    "summary": {
+      "total_tasks": 5,
+      "passed": 2,
+      "failed": 3
+    }
   },
   "timing": {
-    "total_seconds": 435.7,
-    "purple_agent_seconds": 435.7,
-    "green_agent_seconds": 0.0,
-    "purple_agent_percent": 100.0
+    "total_seconds": 42.5,
+    "purple_agent_seconds": 40.0,
+    "green_agent_seconds": 2.5,
+    "purple_agent_percent": 94.2
+  }
+}
+```
+
+**Per-Task Result Structure:**
+
+```json
+{
+  "task_idx": "456",
+  "task_category": "sales_insight_mining",
+  "task_query": "Which competitors are we at a disadvantage against?",
+  "dataset_reference": {
+    "source": "Salesforce/CRMArenaPro",
+    "split": "b2b",
+    "idx": "456",
+    "reward_metric": "fuzzy_match"
+  },
+  "entropic": {
+    "crm_reward": 1.0,
+    "total_score": 98.3,
+    "dimension_scores": {...},
+    "success": true
+  },
+  "original": {
+    "reward": 1,
+    "parsed_answer": ["Adaptive Design Solutions"]
   }
 }
 ```
@@ -693,15 +770,25 @@ Lead.Id → VoiceCallTranscript__c.LeadId__c
 | Context Build         | 0.001s  | Per task     |
 | Evaluation            | 0.15s   | Per task     |
 | Scoring               | 0.002s  | Per task     |
-| **Green Agent Total** | **<1%** | Near-instant |
+| **Green Agent Total** | **<6%** | Near-instant |
 
-**Test Results (5 tasks):**
+**Test Results (5 tasks with drift=medium, rot=medium):**
 
 ```
-Total:        435.7s
-├─ Purple:    435.7s (100%)  ← LLM inference
-└─ Green:     0.0s   (0%)    ← Benchmark overhead
+Total:        42.5s
+├─ Purple:    40.0s (94.2%)  ← LLM inference + SQL
+└─ Green:     2.5s  (5.8%)   ← Evaluation overhead
 ```
+
+**Per-Task Breakdown:**
+
+| Task | Category | Time | Purple % |
+|------|----------|------|----------|
+| 456 | sales_insight_mining | 3.6s | 100% |
+| 102 | monthly_trend_analysis | 3.8s | 100% |
+| 1126 | best_region_identification | 17.3s | 95.5% |
+| 1003 | conversion_rate_comprehension | 9.7s | 91.3% |
+| 914 | handle_time | 8.1s | 89.6% |
 
 </details>
 
@@ -724,6 +811,14 @@ docker push ghcr.io/rkstu/entropic-crmarena-green:latest
 ---
 
 ## Changelog
+
+### v2.0.0 (February 28, 2026)
+
+- ✅ **Hardcoded Adversarial Settings**: `drift_level=medium`, `rot_level=medium`, `org_type=b2b` for consistent leaderboard evaluation
+- ✅ **Dual Scoring Modes**: Both Original (CRMArena-Pro) and Entropic (7-Dimension) scores
+- ✅ **Enhanced Result Format**: Includes `task_query` and `dataset_reference` for traceability
+- ✅ **Full Dataset Support**: `task_limit=None` runs all 2,140 tasks
+- ✅ **OpenAI API Support**: Works with `OPENAI_API_KEY` in addition to `NEBIUS_API_KEY`
 
 ### v1.1.0 (January 15, 2026)
 

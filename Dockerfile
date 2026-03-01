@@ -20,6 +20,8 @@ COPY --chown=agent:agent uv.lock ./
 # Copy source code
 COPY --chown=agent:agent src src
 COPY --chown=agent:agent crm crm
+COPY --chown=agent:agent shared shared
+COPY --chown=agent:agent original original
 
 # Install dependencies
 RUN uv sync --locked

@@ -8,6 +8,7 @@ dependencies = [
     # A2A Protocol SDK
     "a2a-sdk[http-server]>=0.3.20",
     "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0", # For configuration management
     "uvicorn>=0.30.0",
     "httpx>=0.27.0",
     "python-dotenv>=1.0.0",
@@ -28,7 +29,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src", "crm"]
+packages = ["src", "crm", "original", "shared"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

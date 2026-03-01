@@ -3,6 +3,8 @@ Entropic CRMArena Green Agent
 
 Implements CRM agent evaluation with Schema Drift, Context Rot,
 and 7-Dimension Scoring.
+
+Uses centralized configuration from shared.config.
 """
 
 import json
@@ -17,6 +19,7 @@ from a2a.types import Message, TaskState, Part, TextPart, DataPart
 from a2a.utils import get_message_text, new_agent_text_message
 
 from messenger import Messenger
+from shared.config import settings
 
 # Import CRM modules (these will be in the crm/ directory)
 from crm.tasks import TaskLoader, CRMTask, TASK_CATEGORIES
@@ -34,21 +37,58 @@ class EvalRequest(BaseModel):
 
 
 class AssessmentConfig(BaseModel):
-    """Configuration for CRMArena assessment."""
-    # Task selection
+    """
+    Configuration for CRMArena assessment.
+    
+    Only task selection parameters are configurable from leaderboard.
+    Adversarial testing parameters are HARDCODED for consistent evaluation.
+    """
+    # Task selection (configurable)
     task_ids: Optional[list[str]] = Field(None, description="Specific task IDs to run")
     task_categories: Optional[list[str]] = Field(None, description="Filter by task categories")
-    task_percentage: float = Field(5.0, description="Percentage of tasks to sample (1-100)")
-    task_limit: Optional[int] = Field(None, description="Maximum number of tasks")
+    task_percentage: float = Field(
+        default_factory=lambda: settings.assessment.task_percentage,
+        description="Percentage of tasks to sample (1-100)"
+    )
+    task_limit: Optional[int] = Field(
+        default_factory=lambda: settings.assessment.task_limit,
+        description="Maximum number of tasks"
+    )
     
-    # Entropy settings (our innovation)
-    drift_level: str = Field("none", description="Schema drift: none, low, medium, high")
-    rot_level: str = Field("none", description="Context rot: none, low, medium, high")
+    # =========================================================================
+    # HARDCODED ADVERSARIAL PARAMETERS (not configurable from leaderboard)
+    # These ensure consistent, reproducible adversarial robustness testing
+    # =========================================================================
     
-    # Evaluation settings
-    max_steps: int = Field(15, description="Maximum agent turns per task")
-    timeout: int = Field(300, description="Timeout per task in seconds")
-    org_type: str = Field("b2b", description="Organization type: b2b or b2c")
+    # Entropy settings - HARDCODED for adversarial testing
+    drift_level: str = Field(
+        default="medium",
+        description="Schema drift: medium (HARDCODED for adversarial testing)"
+    )
+    rot_level: str = Field(
+        default="medium",
+        description="Context rot: medium (HARDCODED for adversarial testing)"
+    )
+    
+    # Evaluation settings - HARDCODED for consistent benchmarking
+    max_steps: int = Field(
+        default=10,
+        description="Maximum agent turns per task (HARDCODED)"
+    )
+    timeout: int = Field(
+        default=300,
+        description="Timeout per task in seconds (HARDCODED)"
+    )
+    org_type: str = Field(
+        default="b2b",
+        description="Organization type: b2b (HARDCODED for CRMArenaPro B2B split)"
+    )
+    
+    # Original mode compatibility (both run by default)
+    skip_original: bool = Field(
+        default_factory=lambda: settings.assessment.skip_original,
+        description="Skip original CRMArena-Pro scoring (default: False = run both)"
+    )
 
 
 class Agent:
@@ -72,6 +112,10 @@ class Agent:
         self.evaluator: Optional[CRMArenaEvaluator] = None
         self.scorer = SevenDimensionScorer()
         self.results: list[dict[str, Any]] = []
+        
+        # Original mode components (initialized in _initialize_components)
+        self.original_evaluator = None
+        self.original_scorer = None
 
     def validate_request(self, request: EvalRequest) -> tuple[bool, str]:
         """Validate the assessment request."""
@@ -79,22 +123,11 @@ class Agent:
         if missing_roles:
             return False, f"Missing required participant roles: {missing_roles}"
 
-        # Validate config values
-        config = request.config
-        
-        drift = config.get("drift_level", "none")
-        if drift not in ["none", "low", "medium", "high"]:
-            return False, f"Invalid drift_level: {drift}. Must be none/low/medium/high"
-        
-        rot = config.get("rot_level", "none")
-        if rot not in ["none", "low", "medium", "high"]:
-            return False, f"Invalid rot_level: {rot}. Must be none/low/medium/high"
-        
-        org = config.get("org_type", "b2b")
-        if org not in ["b2b", "b2c"]:
-            return False, f"Invalid org_type: {org}. Must be b2b/b2c"
+        # Note: drift_level, rot_level, max_steps, timeout, org_type are HARDCODED
+        # and not validated from config (they're ignored in _parse_config)
         
         # Validate task categories if specified
+        config = request.config
         categories = config.get("task_categories")
         if categories:
             invalid = [c for c in categories if c not in TASK_CATEGORIES]
@@ -104,17 +137,43 @@ class Agent:
         return True, "ok"
 
     def _parse_config(self, config: dict[str, Any]) -> AssessmentConfig:
-        """Parse and validate assessment configuration."""
+        """
+        Parse assessment configuration.
+        
+        Only task selection parameters are accepted from config.
+        Adversarial parameters (drift_level, rot_level, max_steps, timeout, org_type)
+        are HARDCODED and cannot be overridden for consistent evaluation.
+        """
+        # Log if caller tried to override hardcoded params (for awareness)
+        hardcoded_overrides = []
+        if config.get("drift_level") and config.get("drift_level") != "medium":
+            hardcoded_overrides.append(f"drift_level={config.get('drift_level')}")
+        if config.get("rot_level") and config.get("rot_level") != "medium":
+            hardcoded_overrides.append(f"rot_level={config.get('rot_level')}")
+        if config.get("max_steps") and config.get("max_steps") != 10:
+            hardcoded_overrides.append(f"max_steps={config.get('max_steps')}")
+        if config.get("org_type") and config.get("org_type") != "b2b":
+            hardcoded_overrides.append(f"org_type={config.get('org_type')}")
+        
+        if hardcoded_overrides:
+            logger.warning(
+                f"Ignoring config overrides for hardcoded params: {hardcoded_overrides}. "
+                "Using: drift_level=medium, rot_level=medium, max_steps=10, org_type=b2b"
+            )
+        
         return AssessmentConfig(
+            # Configurable task selection params
             task_ids=config.get("task_ids"),
             task_categories=config.get("task_categories"),
             task_percentage=config.get("task_percentage", 5.0),
             task_limit=config.get("task_limit"),
-            drift_level=config.get("drift_level", "none"),
-            rot_level=config.get("rot_level", "none"),
-            max_steps=config.get("max_steps", 15),
-            timeout=config.get("timeout", 300),
-            org_type=config.get("org_type", "b2b"),
+            skip_original=config.get("skip_original", False),
+            # HARDCODED adversarial params - ignore any incoming values
+            drift_level="medium",
+            rot_level="medium",
+            max_steps=10,
+            timeout=300,
+            org_type="b2b",
         )
 
     def _initialize_components(self, config: AssessmentConfig):
@@ -122,42 +181,68 @@ class Agent:
         # Task loader
         self.task_loader = TaskLoader(org_type=config.org_type)
         
-        # Entropy engine for drift/rot
+        # Entropy engine for drift/rot (Entropic mode)
         drift = DriftLevel(config.drift_level) if config.drift_level != "none" else DriftLevel.NONE
         rot = RotLevel(config.rot_level) if config.rot_level != "none" else RotLevel.NONE
         self.entropy_engine = EntropyEngine(drift_level=drift, rot_level=rot)
         
-        # Answer evaluator
+        # Entropic evaluator (always initialized)
         self.evaluator = CRMArenaEvaluator()
+        
+        # Original mode components (initialized by default unless skip_original=True)
+        if not config.skip_original:
+            from original import OriginalEvaluator, OriginalScorer
+            self.original_evaluator = OriginalEvaluator()
+            self.original_scorer = OriginalScorer()
+            logger.info("Original CRMArena-Pro scoring ENABLED (both modes will run)")
+        else:
+            self.original_evaluator = None
+            self.original_scorer = None
+            logger.info("Original CRMArena-Pro scoring DISABLED (entropic only)")
 
     def _get_tasks(self, config: AssessmentConfig) -> list[CRMTask]:
-        """Get tasks based on configuration."""
+        """
+        Get tasks based on configuration.
+        
+        Task selection priority:
+        1. task_ids: Run specific task IDs if provided
+        2. task_categories: Filter by categories if provided
+        3. task_limit: Run up to N tasks if provided
+        4. Default: Run ALL tasks (full 2,140 task benchmark)
+        """
         if config.task_ids:
-            # Specific task IDs
+            # Specific task IDs requested
             tasks = []
             for task_id in config.task_ids:
                 task = self.task_loader.get_task_by_idx(task_id)
                 if task:
                     tasks.append(task)
+            logger.info(f"Running {len(tasks)} specific tasks by ID")
             return tasks
         
         elif config.task_categories:
             # Filter by categories
-            return self.task_loader.load_tasks(
+            tasks = self.task_loader.load_tasks(
                 categories=config.task_categories,
                 limit=config.task_limit
             )
+            logger.info(f"Running {len(tasks)} tasks from categories: {config.task_categories}")
+            return tasks
+        
+        elif config.task_limit:
+            # task_limit provided - run limited sample for quick testing
+            all_tasks = self.task_loader.load_tasks()
+            random.seed(42)  # Reproducibility
+            sample_size = min(config.task_limit, len(all_tasks))
+            tasks = random.sample(all_tasks, sample_size)
+            logger.info(f"Running {len(tasks)} tasks (task_limit={config.task_limit})")
+            return tasks
         
         else:
-            # Sample random tasks
+            # No limit specified - run ALL tasks (full benchmark)
             all_tasks = self.task_loader.load_tasks()
-            sample_size = int(len(all_tasks) * config.task_percentage / 100)
-            if config.task_limit:
-                sample_size = min(sample_size, config.task_limit)
-            sample_size = max(1, sample_size)  # At least 1 task
-            
-            random.seed(42)  # Reproducibility
-            return random.sample(all_tasks, min(sample_size, len(all_tasks)))
+            logger.info(f"Running ALL {len(all_tasks)} tasks (full benchmark)")
+            return all_tasks
 
     async def _evaluate_single_task(
         self,
@@ -249,7 +334,9 @@ class Agent:
             # Parse agent response
             agent_answer = self._extract_answer(response)
             
-            # Evaluate answer
+            # ================================================================
+            # ENTROPIC EVALUATION (always runs)
+            # ================================================================
             eval_start = time.time()
             eval_result = self.evaluator.evaluate(
                 proposed_answer=agent_answer,
@@ -288,10 +375,41 @@ class Agent:
                 malformed_tool_calls=0,
             )
             
-            # Calculate 7D score
+            # Calculate 7D score (Entropic)
             score_start = time.time()
             score_result = self.scorer.score(task.idx, task.task, metrics)
             score_time = time.time() - score_start
+            
+            # ================================================================
+            # ORIGINAL EVALUATION (runs by default unless skip_original=True)
+            # ================================================================
+            original_result = None
+            original_eval_time = 0
+            if self.original_evaluator is not None:
+                original_eval_start = time.time()
+                original_eval_result = self.original_evaluator.evaluate(
+                    proposed_answer=agent_answer,
+                    gt_answer=task.answer,
+                    reward_metric=task.reward_metric,
+                    task_name=task.task,
+                )
+                original_eval_time = time.time() - original_eval_start
+                
+                # Record in original scorer
+                self.original_scorer.score(
+                    task_idx=task.idx,
+                    task_name=task.task,
+                    reward=original_eval_result.get("reward", 0),
+                    parsed_answer=original_eval_result.get("parsed_answer", []),
+                    gt_answer=task.answer if isinstance(task.answer, list) else [task.answer],
+                    metrics=original_eval_result.get("metrics"),
+                )
+                
+                original_result = {
+                    "reward": original_eval_result.get("reward", 0),
+                    "parsed_answer": original_eval_result.get("parsed_answer", []),
+                }
+                logger.info(f"  Original mode: reward={original_result['reward']}")
             
             # Calculate total task time
             task_total_time = time.time() - task_start_time
@@ -302,13 +420,31 @@ class Agent:
             logger.info(f"  ├─ Purple Agent: {purple_agent_time:.2f}s ({purple_agent_time/task_total_time*100:.1f}%)")
             logger.info(f"  ├─ Green Agent:  {green_agent_time:.2f}s ({green_agent_time/task_total_time*100:.1f}%)")
             logger.info(f"  │   ├─ Context build: {context_time:.3f}s")
-            logger.info(f"  │   ├─ Evaluation:    {eval_time:.3f}s")
+            logger.info(f"  │   ├─ Entropic eval: {eval_time:.3f}s")
+            if original_eval_time > 0:
+                logger.info(f"  │   ├─ Original eval: {original_eval_time:.3f}s")
             logger.info(f"  │   └─ Scoring:       {score_time:.3f}s")
             logger.info(f"  └─ TOTAL: {task_total_time:.2f}s")
             
-            return {
+            result = {
                 "task_idx": task.idx,
                 "task_category": task.task,
+                # Original question/task from CRMArenaPro dataset
+                "task_query": task.query,
+                "dataset_reference": {
+                    "source": "Salesforce/CRMArenaPro",
+                    "split": "b2b",
+                    "idx": task.idx,
+                    "reward_metric": task.reward_metric,
+                },
+                # Entropic scores
+                "entropic": {
+                    "crm_reward": crm_reward,
+                    "total_score": score_result.total_score,
+                    "dimension_scores": score_result.dimension_breakdown,
+                    "success": crm_reward > 0,
+                },
+                # Keep legacy fields for backward compatibility
                 "crm_reward": crm_reward,
                 "total_score": score_result.total_score,
                 "dimension_scores": score_result.dimension_breakdown,
@@ -331,11 +467,24 @@ class Agent:
                 }
             }
             
+            # Add original mode result if available
+            if original_result is not None:
+                result["original"] = original_result
+            
+            return result
+            
         except Exception as e:
             logger.error(f"Task {task.idx} evaluation failed: {e}")
             return {
                 "task_idx": task.idx,
                 "task_category": task.task,
+                "task_query": task.query,
+                "dataset_reference": {
+                    "source": "Salesforce/CRMArenaPro",
+                    "split": "b2b",
+                    "idx": task.idx,
+                    "reward_metric": task.reward_metric,
+                },
                 "crm_reward": 0,
                 "total_score": 0,
                 "dimension_scores": {},
@@ -549,18 +698,59 @@ class Agent:
         return context
 
     def _extract_answer(self, response: str) -> str:
-        """Extract the answer from agent response."""
+        """
+        Extract the answer from agent response.
+        
+        Handles multiple response formats:
+        1. Plain text answer
+        2. JSON with "answer" field
+        3. Text + JSON (common A2A artifact format)
+        """
         if not response:
             return ""
         
-        # Try to parse as JSON
+        response = response.strip()
+        
+        # Check if response contains JSON (TextPart + DataPart concatenated)
+        # Pattern: "Answer text\n{json...}"
+        json_start = response.find('\n{')
+        if json_start > 0:
+            # Extract text before JSON as the primary answer
+            text_part = response[:json_start].strip()
+            json_part = response[json_start:].strip()
+            
+            # Try to get "answer" from JSON if it exists
+            try:
+                data = json.loads(json_part)
+                if isinstance(data, dict) and "answer" in data:
+                    # Use JSON answer if it matches text_part (validation)
+                    json_answer = data["answer"]
+                    if json_answer and isinstance(json_answer, str):
+                        return json_answer.strip()
+            except json.JSONDecodeError:
+                pass
+            
+            # Return text part if JSON parsing fails
+            return text_part
+        
+        # Try to parse entire response as JSON
         try:
             data = json.loads(response)
             if isinstance(data, dict):
-                return data.get("answer", data.get("response", str(data)))
+                # Priority: answer > response > text > first string value
+                for key in ["answer", "response", "text", "result"]:
+                    if key in data and data[key]:
+                        return str(data[key]).strip()
+                # Fallback to first string value
+                for v in data.values():
+                    if isinstance(v, str) and v:
+                        return v.strip()
             return str(data)
         except json.JSONDecodeError:
-            return response
+            pass
+        
+        # Return as-is if no special handling needed
+        return response
 
     def _drift_level_to_int(self, level: str) -> int:
         """Convert drift level string to int."""
@@ -579,11 +769,11 @@ class Agent:
         total_tasks = len(self.results)
         total_passed = sum(1 for r in self.results if r.get("crm_reward", 0) > 0)
         
-        # Calculate averages
+        # Calculate averages (Entropic mode)
         avg_score = sum(r.get("total_score", 0) for r in self.results) / total_tasks if total_tasks > 0 else 0
         pass_rate = total_passed / total_tasks if total_tasks > 0 else 0
         
-        # Dimension averages
+        # Dimension averages (Entropic mode)
         dimension_avgs = {}
         for result in self.results:
             for dim, score in result.get("dimension_scores", {}).items():
@@ -596,7 +786,7 @@ class Agent:
             for dim, scores in dimension_avgs.items()
         }
         
-        # Category breakdown
+        # Category breakdown (Entropic mode)
         by_category = {}
         for result in self.results:
             cat = result.get("task_category", "unknown")
@@ -611,11 +801,24 @@ class Agent:
             by_category[cat]["pass_rate"] = by_category[cat]["passed"] / count if count > 0 else 0
             by_category[cat]["avg_score"] = by_category[cat]["total_score"] / count if count > 0 else 0
         
-        return {
+        # Build base result with Entropic scores
+        aggregated = {
             "participants": {
                 "agent": purple_agent_id,
             },
             "results": self.results,
+            # Entropic mode summary (primary)
+            "entropic": {
+                "summary": {
+                    "pass_rate": round(pass_rate, 3),
+                    "total_tasks": total_tasks,
+                    "total_passed": total_passed,
+                    "avg_score": round(avg_score, 1),
+                },
+                "dimension_averages": {k: round(v, 1) for k, v in dimension_averages.items()},
+                "by_category": by_category,
+            },
+            # Legacy fields for backward compatibility
             "summary": {
                 "pass_rate": round(pass_rate, 3),
                 "total_tasks": total_tasks,
@@ -628,10 +831,24 @@ class Agent:
                 "drift_level": config.drift_level,
                 "rot_level": config.rot_level,
                 "org_type": config.org_type,
+                "skip_original": config.skip_original,
             },
             "timestamp": datetime.utcnow().isoformat(),
-            "version": "1.0.0",
+            "version": "2.0.0",  # Updated version for dual-mode support
         }
+        
+        # Add Original mode scores if available
+        if self.original_scorer is not None:
+            original_scores = self.original_scorer.to_dict()
+            aggregated["original"] = {
+                "scores": original_scores.get("scores", {}),
+                "summary": original_scores.get("summary", {}),
+                "by_category": original_scores.get("by_category", {}),
+                "by_metric_type": original_scores.get("by_metric_type", {}),
+            }
+            logger.info(f"Original mode accuracy: {original_scores.get('scores', {}).get('accuracy_percent', 0):.1f}%")
+        
+        return aggregated
 
     async def run(self, message: Message, updater: TaskUpdater) -> None:
         """
@@ -702,6 +919,10 @@ class Agent:
         total_purple_time = 0.0
         total_green_time = 0.0
         
+        # Reset original scorer for fresh run
+        if self.original_scorer is not None:
+            self.original_scorer.reset()
+        
         for i, task in enumerate(tasks):
             # Progress update
             await updater.update_status(
@@ -760,11 +981,24 @@ class Agent:
             "purple_agent_percent": round(total_purple_time/assessment_total_time*100, 1) if assessment_total_time > 0 else 0,
         }
         
-        # Calculate summary text with timing
+        # Calculate summary text with both scoring modes
         summary_text = (
             f"Assessment Complete\n"
             f"==================\n"
             f"Tasks: {aggregated['summary']['total_tasks']}\n"
+        )
+        
+        # Add Original mode scores if available
+        if "original" in aggregated:
+            original_acc = aggregated["original"]["scores"].get("accuracy_percent", 0)
+            summary_text += (
+                f"\n--- Original CRMArena-Pro Mode ---\n"
+                f"Accuracy: {original_acc:.1f}%\n"
+            )
+        
+        # Add Entropic mode scores
+        summary_text += (
+            f"\n--- Entropic Mode (7D Scoring) ---\n"
             f"Passed: {aggregated['summary']['total_passed']}\n"
             f"Pass Rate: {aggregated['summary']['pass_rate']:.1%}\n"
             f"Avg Score: {aggregated['summary']['avg_score']:.1f}\n"

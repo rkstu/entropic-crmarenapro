@@ -2,13 +2,15 @@
 CRMArena-compatible Answer Evaluator
 
 Extracts answers from agent responses and scores them against ground truth.
+Uses centralized configuration from shared.config.
 """
 
-import os
 import re
 import json
 import logging
 from typing import List, Dict, Any, Optional
+
+from shared.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -16,28 +18,42 @@ logger = logging.getLogger(__name__)
 class CRMArenaEvaluator:
     """
     Evaluator that matches CRMArena's answer parsing patterns.
+    
+    Configuration is loaded from shared.config.settings.
+    Override with explicit parameters if needed.
     """
     
     def __init__(
         self,
-        model: str = "meta-llama/Llama-3.3-70B-Instruct",
+        model: Optional[str] = None,
         api_key: Optional[str] = None,
-        base_url: str = "https://api.studio.nebius.ai/v1/"
+        base_url: Optional[str] = None
     ):
-        self.model = model
-        self.base_url = base_url
-        self.api_key = api_key or os.getenv('NEBIUS_API_KEY') or os.getenv('OPENAI_API_KEY')
+        """
+        Initialize evaluator with optional overrides.
+        
+        Args:
+            model: LLM model (default: from settings.llm.model)
+            api_key: API key (default: from settings.llm.api_key)
+            base_url: API base URL (default: from settings.llm.effective_base_url)
+        """
+        self.model = model or settings.llm.model
+        self.base_url = base_url or settings.llm.effective_base_url
+        self.api_key = api_key or settings.llm.api_key
         self._client = None
         self.total_tokens = 0
+        
+        logger.debug(f"Evaluator initialized: model={self.model}, base_url={self.base_url}")
     
     @property
     def client(self):
-        """Lazy-load OpenAI client."""
+        """Lazy-load OpenAI-compatible client."""
         if self._client is None:
             from openai import OpenAI
             self._client = OpenAI(
                 base_url=self.base_url,
-                api_key=self.api_key
+                api_key=self.api_key,
+                timeout=settings.llm.timeout
             )
         return self._client
     
@@ -74,6 +90,17 @@ class CRMArenaEvaluator:
                 cleaned = proposed_answer.strip().strip('"').strip("'")
                 if cleaned == gt_answer[0]:
                     return {"reward": 1, "parsed_answer": [cleaned]}
+                
+                # Handle semantic "None" equivalents
+                if gt_answer[0] == "None":
+                    none_phrases = [
+                        "none", "no ", "n/a", "not found", "not available",
+                        "no issues", "no records", "no results", "no data",
+                        "nothing", "empty", "null", "no answer"
+                    ]
+                    cleaned_lower = cleaned.lower()
+                    if any(phrase in cleaned_lower for phrase in none_phrases):
+                        return {"reward": 1, "parsed_answer": ["None"]}
             
             # Use LLM extraction for complex answers
             parsed_answers = self._parse_answers(proposed_answer, task_name)

@@ -3,13 +3,13 @@ Entropic CRMArena Green Agent Server
 
 A2A-compliant Green Agent for CRM agent evaluation with adversarial
 robustness testing (Schema Drift + Context Rot + 7D Scoring).
+
+Uses centralized configuration from shared.config.
 """
 
 import argparse
+import logging
 import uvicorn
-from dotenv import load_dotenv
-
-load_dotenv()
 
 from a2a.server.apps import A2AStarletteApplication
 from a2a.server.request_handlers import DefaultRequestHandler
@@ -20,7 +20,10 @@ from a2a.types import (
     AgentSkill,
 )
 
+from shared.config import settings
 from executor import Executor
+
+logger = logging.getLogger(__name__)
 
 
 def create_agent_card(card_url: str) -> AgentCard:
@@ -105,12 +108,22 @@ def create_agent_card(card_url: str) -> AgentCard:
 
 def main():
     parser = argparse.ArgumentParser(description="Run Entropic CRMArena A2A Green Agent")
-    parser.add_argument("--host", type=str, default="0.0.0.0", help="Host to bind the server")
-    parser.add_argument("--port", type=int, default=9009, help="Port to bind the server")
+    parser.add_argument("--host", type=str, default=None, help="Host to bind the server")
+    parser.add_argument("--port", type=int, default=None, help="Port to bind the server")
     parser.add_argument("--card-url", type=str, help="URL to advertise in the agent card")
     args = parser.parse_args()
+    
+    # Use args > settings > defaults
+    host = args.host or settings.server.host
+    port = args.port or settings.server.port
+    
+    # Configure logging from settings
+    logging.basicConfig(
+        level=getattr(logging, settings.server.log_level.upper(), logging.INFO),
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
 
-    card_url = args.card_url or f"http://{args.host}:{args.port}/"
+    card_url = args.card_url or f"http://{host}:{port}/"
     agent_card = create_agent_card(card_url)
 
     request_handler = DefaultRequestHandler(
@@ -122,11 +135,17 @@ def main():
         http_handler=request_handler,
     )
     
+    # Log configuration summary
     print("=" * 60)
     print("Entropic CRMArena A2A Green Agent")
     print("=" * 60)
-    print(f"Server: http://{args.host}:{args.port}/")
+    print(f"Server: http://{host}:{port}/")
     print(f"Agent Card: {card_url}")
+    print("")
+    print("Configuration:")
+    print(f"  - LLM Model: {settings.llm.model}")
+    print(f"  - LLM Provider: {settings.llm.provider.value}")
+    print(f"  - API Key: {'configured' if settings.llm.api_key else 'NOT SET'}")
     print("")
     print("Features:")
     print("  - Schema Drift: Tests agent adaptation to column renames")
@@ -135,9 +154,10 @@ def main():
     print("                QUERY_EFFICIENCY, ERROR_RECOVERY, TRAJECTORY_EFFICIENCY,")
     print("                HALLUCINATION_RATE")
     print("  - CRMArena: 22 task categories from Salesforce benchmark")
+    print("  - Original Mode: CRMArena-Pro compatible scoring (default: enabled)")
     print("=" * 60)
     
-    uvicorn.run(server.build(), host=args.host, port=args.port)
+    uvicorn.run(server.build(), host=host, port=port)
 
 
 if __name__ == '__main__':
